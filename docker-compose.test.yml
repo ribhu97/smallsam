@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  # Test Infrastructure
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: smallsam-postgres-test
+    environment:
+      POSTGRES_DB: smallsam_test_db
+      POSTGRES_USER: smallsam
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smallsam"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-test:
+    image: redis:7-alpine
+    container_name: smallsam-redis-test
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant-test:
+    image: qdrant/qdrant:latest
+    container_name: smallsam-qdrant-test
+    ports:
+      - "6335:6333"
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Test Services
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    container_name: smallsam-backend-test
+    environment:
+      - DATABASE_URL=postgresql://smallsam:password@postgres-test:5432/smallsam_test_db
+      - REDIS_URL=redis://redis-test:6379/0
+      - QDRANT_URL=http://qdrant-test:6333
+      - ENVIRONMENT=test
+    env_file:
+      - .env.test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      qdrant-test:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - ./tests/coverage:/app/coverage
+    command: pytest -v --cov=app --cov-report=html:/app/coverage/backend
+
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.test
+    container_name: smallsam-frontend-test
+    environment:
+      - NODE_ENV=test
+      - NEXT_PUBLIC_API_URL=http://backend-test:8000/api/v1
+    volumes:
+      - ./frontend:/app
+      - ./tests/coverage:/app/coverage
+    command: npm run test:coverage
+
+  agent-framework-test:
+    build:
+      context: ./agent-framework
+      dockerfile: Dockerfile.test
+    container_name: smallsam-agents-test
+    environment:
+      - DATABASE_URL=postgresql://smallsam:password@postgres-test:5432/smallsam_test_db
+      - REDIS_URL=redis://redis-test:6379/0
+      - QDRANT_URL=http://qdrant-test:6333
+      - ENVIRONMENT=test
+    env_file:
+      - .env.test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      qdrant-test:
+        condition: service_healthy
+    volumes:
+      - ./agent-framework:/app
+      - ./tests/coverage:/app/coverage
+    command: pytest -v --cov=app --cov-report=html:/app/coverage/agents
+
+  data-orchestration-test:
+    build:
+      context: ./data-orchestration
+      dockerfile: Dockerfile.test
+    container_name: smallsam-data-orchestration-test
+    environment:
+      - DATABASE_URL=postgresql://smallsam:password@postgres-test:5432/smallsam_test_db
+      - REDIS_URL=redis://redis-test:6379/0
+      - QDRANT_URL=http://qdrant-test:6333
+      - CELERY_BROKER_URL=redis://redis-test:6379/2
+      - CELERY_RESULT_BACKEND=redis://redis-test:6379/3
+      - ENVIRONMENT=test
+    env_file:
+      - .env.test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      qdrant-test:
+        condition: service_healthy
+    volumes:
+      - ./data-orchestration:/app
+      - ./tests/coverage:/app/coverage
+    command: pytest -v --cov=app --cov-report=html:/app/coverage/data-orchestration
+
+  # Integration Tests
+  integration-test:
+    build:
+      context: ./tests
+      dockerfile: Dockerfile.integration
+    container_name: smallsam-integration-test
+    environment:
+      - BACKEND_URL=http://backend-test:8000
+      - FRONTEND_URL=http://frontend-test:3000
+      - AGENT_URL=http://agent-framework-test:8001
+      - DATA_URL=http://data-orchestration-test:8002
+    depends_on:
+      - backend-test
+      - frontend-test
+      - agent-framework-test
+      - data-orchestration-test
+    volumes:
+      - ./tests:/app
+      - ./tests/coverage:/app/coverage
+    command: pytest -v tests/integration/ --cov-report=html:/app/coverage/integration
+
+volumes:
+  test_coverage:
+
+networks:
+  default:
+    name: smallsam-test-network

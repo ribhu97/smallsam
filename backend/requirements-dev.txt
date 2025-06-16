@@ -1,0 +1,54 @@
+# Include production requirements
+-r requirements.txt
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+httpx==0.25.2
+pytest-xdist==3.5.0
+pytest-html==4.1.1
+
+# Code Quality
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
+bandit==1.7.5
+safety==2.3.5
+
+# Pre-commit
+pre-commit==3.6.0
+
+# Development Tools
+ipython==8.17.2
+jupyter==1.0.0
+
+# Documentation
+mkdocs==1.5.3
+mkdocs-material==9.4.8
+
+# Database Tools
+sqlalchemy-stubs==0.4
+
+# Load Testing
+locust==2.17.0
+
+# Debugging
+pdb++==0.10.3
+ipdb==0.13.13
+
+# Type Checking
+types-redis==4.6.0.11
+types-requests==2.31.0.10
+types-python-dateutil==2.8.19.20
+
+# Profiling
+py-spy==0.3.14
+memory-profiler==0.61.0
+
+# Linting Extensions
+flake8-docstrings==1.7.0
+flake8-import-order==0.18.2
+flake8-bugbear==23.11.28
